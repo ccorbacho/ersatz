@@ -1,0 +1,7 @@
+Ersatz is a simple, Kaffeine like Media Player for KDE4 (with
+playlist functionality).
+
+It's also an excuse for me to play with PyQt & PyKDE.
+
+It currently relies on a patched kdebindings (see KDE Bug 188315),
+as the Python bindings for KDE's phonon are currently broken.
