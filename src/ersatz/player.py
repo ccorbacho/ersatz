@@ -21,7 +21,6 @@
 # * Playlist filter
 # * Video in playlist view
 
-import cProfile
 import copy
 import mimetypes
 import os
@@ -31,8 +30,8 @@ import sys
 import urllib
 
 from PyKDE4 import kdecore
-from PyKDE4 import phonon
 from PyKDE4 import kdeui
+from PyQt4 import phonon
 from PyQt4 import QtGui
 from PyQt4 import QtCore
 
@@ -49,7 +48,7 @@ class PopulatePlaylist(threading.Thread):
         while self.should_continue:
             row, items = self._queue.get()
             for item in items:
-                if os.path.isdir(item):
+                if os.path.isdir(item.decode("utf-8")):
                     row = self._visitor(row, item, os.listdir(item))
                     continue
                 else:
@@ -193,8 +192,7 @@ class PlaylistModel(QtCore.QAbstractTableModel):
         self.beginInsertRows(QtCore.QModelIndex(), position,
                              position + rows - 1)
         for row in range(rows):
-            self.playlist.insert(position + row,
-                                 PlaylistItem())
+            self.playlist.insert(position + row, PlaylistItem())
         self.endInsertRows()
 
     def removeRows(self):
@@ -265,13 +263,8 @@ class MediaPlayer(kdeui.KMainWindow):
         self.video_widget = phonon.Phonon.VideoWidget()
         self.audio_output = phonon.Phonon.AudioOutput()
         self.media_object = phonon.Phonon.MediaObject()
-        self.connect(
-            self.media_object, QtCore.SIGNAL("aboutToFinish()"),
-            self.queue_next_track)
-        self.connect(
-            self.media_object,
-            QtCore.SIGNAL("currentSourceChanged(const Phonon::MediaSource &)"),
-            self.update_title)
+        self.media_object.aboutToFinish.connect(self.queue_next_track)
+        self.media_object.currentSourceChanged.connect(self.update_title)
         phonon.Phonon.createPath(self.media_object, self.video_widget)
         phonon.Phonon.createPath(self.media_object, self.audio_output)
         self.player_widget = QtGui.QWidget()
@@ -499,7 +492,6 @@ def main(argv):
     app = kdeui.KApplication()
     player = MediaPlayer()
     player.show()
-#    cProfile.run("app.exec_()", "ersatz.pstats")
     app.exec_()
 
 
