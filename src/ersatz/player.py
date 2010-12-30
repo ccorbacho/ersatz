@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2009  Carlos Corbacho <carlos@strangeworlds.co.uk>
+# Copyright 2009-2010  Carlos Corbacho <carlos@strangeworlds.co.uk>
 
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License as
@@ -66,13 +66,13 @@ class PopulatePlaylist(threading.Thread):
                 row += 1
         return row
 
-    def _insert_file(self, row, file):
+    def _insert_file(self, row, file_):
         QtCore.QCoreApplication.processEvents()
         QtCore.QCoreApplication.sendPostedEvents()
         self._playlist_model.insertRows(row)
         self._playlist_model.setData(
             self._playlist_model.index(row, PlaylistModel.FILE),
-            QtCore.QVariant(file))
+            QtCore.QVariant(file_))
 
 
 class PlaylistItem(object):
@@ -85,8 +85,8 @@ class PlaylistItem(object):
         return self._file
 
     @file.setter
-    def file(self, file):
-        self._file = file
+    def file(self, file_):
+        self._file = file_
 
     @property
     def title(self):
@@ -207,7 +207,7 @@ class PlaylistModel(QtCore.QAbstractTableModel):
         if parent.row() != -1:
             row = parent.row()
         raw_data = data.data("text/uri-list")
-        files = [urllib.unquote(file.replace("file://", "")) for file in
+        files = [urllib.unquote(file_.replace("file://", "")) for file_ in
                  unicode(raw_data).strip().split()]
         self._queue.put((row, files))
         return True
@@ -233,20 +233,24 @@ class PlaylistModel(QtCore.QAbstractTableModel):
 
 class SimpleDirModel(QtGui.QDirModel):
 
-    def __init__(self, parent=None, filter=None):
+    def __init__(self, parent=None, filter_=None):
         super(SimpleDirModel, self).__init__(parent)
         self.setReadOnly(True)
         self.setLazyChildCount(True)
         self.setFilter(
             QtCore.QDir.AllDirs | QtCore.QDir.NoDotAndDotDot |
             QtCore.QDir.Files)
-        self.setNameFilters(filter)
+        self.setNameFilters(filter_)
 
     def columnCount(self, index=QtCore.QModelIndex()):
         return 1
 
 
 class MediaPlayer(kdeui.KMainWindow):
+
+    NOT_PLAYING_STATES = set([
+            phonon.Phonon.PausedState, phonon.Phonon.ErrorState,
+            phonon.Phonon.StoppedState])
 
     def __init__(self, parent=None):
         super(MediaPlayer, self).__init__(parent)
@@ -288,9 +292,7 @@ class MediaPlayer(kdeui.KMainWindow):
         self.playlist_view.horizontalHeader().resizeSections(
             QtGui.QHeaderView.Stretch)
 #        self.playlist_view.setUniformRowHeights(True)
-        self.connect(
-            self.playlist_view, QtCore.SIGNAL("doubleClicked(QModelIndex)"),
-            self.play)
+        self.playlist_view.doubleClicked.connect(self.play)
 
     # TODO - split this up
     def _setup_widgets(self):
@@ -299,7 +301,7 @@ class MediaPlayer(kdeui.KMainWindow):
             QtGui.QAbstractItemView.ContiguousSelection)
         media_filter = ["*%s" % extension for extension in
                         self.playlist_model.media_file_extensions]
-        self.dir_model = SimpleDirModel(filter=media_filter)
+        self.dir_model = SimpleDirModel(filter_=media_filter)
         self.dir_view.setModel(self.dir_model)
         self.dir_view.setDragEnabled(True)
 
@@ -308,10 +310,14 @@ class MediaPlayer(kdeui.KMainWindow):
 
         self.tab_widget.addTab(self.player_widget, "Player Window")
 
+        # TODO: Convert this to a vertical splitter
         self.playlist_widget = QtGui.QWidget()
-        self.playlist_layout = QtGui.QHBoxLayout()
+        self.playlist_layout = QtGui.QVBoxLayout()
         self.playlist_widget.setLayout(self.playlist_layout)
-        self.playlist_layout.addWidget(self.dir_view)
+#        self.playlist_layout.addWidget(self.dir_view)
+        filter_text = QtGui.QLineEdit()
+        filter_text.textEdited.connect(self._filter_playlist)
+        self.playlist_layout.addWidget(filter_text)
         self.playlist_layout.addWidget(self.playlist_view)
 
         self.dir_widget = QtGui.QWidget()
@@ -322,7 +328,8 @@ class MediaPlayer(kdeui.KMainWindow):
         self.splitter = QtGui.QSplitter(QtCore.Qt.Horizontal)
 #        self.splitter.addWidget(self.dir_view)
         self.splitter.addWidget(self.dir_widget)
-        self.splitter.addWidget(self.playlist_view)
+        # self.splitter.addWidget(self.playlist_view)
+        self.splitter.addWidget(self.playlist_widget)
 
         self.tab_widget.addTab(self.splitter, "Playlist")
         self.setCentralWidget(self.tab_widget)
@@ -357,7 +364,7 @@ class MediaPlayer(kdeui.KMainWindow):
         previous_action = self._add_action(
             "Previous", self.previous, "media-skip-backward")
         self.play_pause_action = self._add_action(
-            "Play", self.media_object.play, "media-playback-start",
+            "Play", self.play_pause, "media-playback-start",
             QtCore.Qt.Key_Space)
         stop_action = self._add_action(
             "Stop", self.media_object.stop, "media-playback-stop")
@@ -365,9 +372,8 @@ class MediaPlayer(kdeui.KMainWindow):
         next_action = self._add_action(
             "Next", self.next, "media-skip-forward")
 
-        self.connect(self.media_object,
-                     QtCore.SIGNAL("stateChanged(Phonon::State, Phonon::State)"),
-                     self.play_pause)
+        # TODO - probably need this to handle state changes
+        self.media_object.stateChanged.connect(self.play_pause_icon)
 
         controls_toolbar.addAction(previous_action)
         controls_toolbar.addAction(self.play_pause_action)
@@ -404,25 +410,28 @@ class MediaPlayer(kdeui.KMainWindow):
     def _add_media(self):
         # TODO - can we just show media files here?
         files = QtGui.QFileDialog().getOpenFileNames(self, "Add Media")
-        for file in files:
+        for file_ in files:
             row = self.playlist_model.rowCount()
             self.playlist_model.insertRows(row)
             self.playlist_model.setData(
                 self.playlist_model.index(row, PlaylistModel.FILE),
-                QtCore.QVariant(file))
+                QtCore.QVariant(file_))
             index = self.playlist_model.index(row, 0)
         self.playlist_view.resizeRowsToContents()
 
-    def play_pause(self, new_state, old_state):
-        if new_state in [phonon.Phonon.PausedState, phonon.Phonon.ErrorState,
-                         phonon.Phonon.StoppedState]:
+    def play_pause_icon(self, new_state, old_state):
+        if new_state in self.NOT_PLAYING_STATES:
             self.play_pause_action.setIcon(kdeui.KIcon("media-playback-start"))
-            self.connect(self.play_pause_action, QtCore.SIGNAL("triggered()"),
-                         self.media_object.play)
+            self.play_pause_action.setText("Play")
         else:
             self.play_pause_action.setIcon(kdeui.KIcon("media-playback-pause"))
-            self.connect(self.play_pause_action, QtCore.SIGNAL("triggered()"),
-                         self.media_object.pause)
+            self.play_pause_action.setText("Pause")
+
+    def play_pause(self):
+        if self.media_object.state() in self.NOT_PLAYING_STATES:
+            self.media_object.play()
+        else:
+            self.media_object.pause()
 
     def play(self, index):
         if index.isValid():
@@ -437,9 +446,9 @@ class MediaPlayer(kdeui.KMainWindow):
             selected_row, PlaylistModel.FILE)
         self.playlist_model.setData(
             file_index, None, PlaylistModel.ActiveTrackRole)
-        file = self.playlist_model.data(file_index).toString()
+        file_ = self.playlist_model.data(file_index).toString()
         self.current_index = file_index
-        media_source = phonon.Phonon.MediaSource(file)
+        media_source = phonon.Phonon.MediaSource(file_)
         self.media_object.setCurrentSource(media_source)
         self.media_object.play()
 
@@ -461,13 +470,16 @@ class MediaPlayer(kdeui.KMainWindow):
         if not next_index.isValid():
             return
         self.playlist_model.active_track_row += 1
-        file = self.playlist_model.data(next_index).toString()
-        media_source = phonon.Phonon.MediaSource(file)
+        file_ = self.playlist_model.data(next_index).toString()
+        media_source = phonon.Phonon.MediaSource(file_)
         self.media_object.enqueue(media_source)
 
     def update_title(self, source):
-        file = os.path.split(unicode(source.url().toString()))[-1]
-        self.setWindowTitle(u"%s - Ersatz" % file)
+        file_ = os.path.split(unicode(source.url().toString()))[-1]
+        self.setWindowTitle(u"%s - Ersatz" % file_)
+
+    def _filter_playlist(self, filter_text):
+        print filter_text
 
 
 def get_about_data():
@@ -476,14 +488,14 @@ def get_about_data():
     program_name = kdecore.ki18n("Ersatz")
     version = "0.1"
     description = kdecore.ki18n("A simple Media Player")
-    license = kdecore.KAboutData.License_GPL
-    copyright = kdecore.ki18n("(c) 2009 Carlos Corbacho")
+    license_ = kdecore.KAboutData.License_GPL
+    copyright_ = kdecore.ki18n("(c) 2009 Carlos Corbacho")
     text = kdecore.ki18n("none")
     home_page = "www.strangeworlds.co.uk"
     bug_email = "carlos@strangeworlds.co.uk"
     return kdecore.KAboutData(
-        app_name, catalog, program_name, version, description, license,
-        copyright, text, home_page, bug_email)
+        app_name, catalog, program_name, version, description, license_,
+        copyright_, text, home_page, bug_email)
 
 
 def main(argv):
