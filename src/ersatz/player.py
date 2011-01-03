@@ -41,18 +41,16 @@ class PopulatePlaylist(threading.Thread):
     def __init__(self, playlist_model, queue, **kwargs):
         self._playlist_model = playlist_model
         self._queue = queue
-        self.should_continue = True
         super(PopulatePlaylist, self).__init__(**kwargs)
 
     def run(self):
-        while self.should_continue:
-            row, items = self._queue.get()
-            for item in items:
-                if os.path.isdir(item.decode("utf-8")):
-                    row = self._visitor(row, item, os.listdir(item))
-                    continue
-                else:
-                    self._insert_file(row, item)
+        row, items = self._queue.get()
+        for item in items:
+            if os.path.isdir(item.decode("utf-8")):
+                row = self._visitor(row, item, os.listdir(item))
+                continue
+            else:
+                self._insert_file(row, item)
 
     def _visitor(self, row, directory, names):
         for name in sorted(names):
@@ -116,11 +114,8 @@ class PlaylistModel(QtCore.QAbstractTableModel):
         self.active_track_row = -1
         self._queue = Queue.Queue()
         self._populate_thread = PopulatePlaylist(self, self._queue)
+        self._populate_thread.daemon = True
         self._populate_thread.start()
-
-    def __del__(self):
-        self._populate_thread.should_continue = False
-        self._populate_thread.join()
 
     def _get_file_extensions(self):
         file_extensions = []
