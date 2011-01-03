@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2009-2010  Carlos Corbacho <carlos@strangeworlds.co.uk>
+# Copyright 2009-2011  Carlos Corbacho <carlos@strangeworlds.co.uk>
 
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License as
@@ -279,8 +279,9 @@ class MediaPlayer(kdeui.KMainWindow):
         self.playlist_view.setAlternatingRowColors(True)
 #        self.playlist_view.setDragDropMode(QtGui.QAbstractItemView.DropOnly)
         self.playlist_model = PlaylistModel()
-
-        self.playlist_view.setModel(self.playlist_model)
+        self.playlist_proxy = QtGui.QSortFilterProxyModel()
+        self.playlist_proxy.setSourceModel(self.playlist_model)
+        self.playlist_view.setModel(self.playlist_proxy)
         self.playlist_view.resizeRowsToContents()
         self.playlist_view.hideColumn(PlaylistModel.FILE)
         self.playlist_view.setAlternatingRowColors(True)
@@ -473,8 +474,12 @@ class MediaPlayer(kdeui.KMainWindow):
         file_ = os.path.split(unicode(source.url().toString()))[-1]
         self.setWindowTitle(u"%s - Ersatz" % file_)
 
-    def _filter_playlist(self, filter_text):
-        print filter_text
+    def _filter_playlist(self, filter_re):
+        self.playlist_proxy.setFilterRegExp(
+            QtCore.QRegExp(
+                filter_re, QtCore.Qt.CaseInsensitive,
+                QtCore.QRegExp.FixedString))
+        self.playlist_proxy.setFilterKeyColumn(1)
 
 
 def get_about_data():
