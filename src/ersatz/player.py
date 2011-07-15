@@ -29,6 +29,10 @@ import threading
 import sys
 import urllib
 
+import sip
+sip.setapi("QString", 2)
+sip.setapi("QVariant", 2)
+
 from PyKDE4 import kdecore
 from PyKDE4 import kdeui
 from PyQt4 import phonon
@@ -71,7 +75,7 @@ class PopulatePlaylist(threading.Thread):
         self._playlist_model.insertRows(row)
         self._playlist_model.setData(
             self._playlist_model.index(row, PlaylistModel.FILE),
-            QtCore.QVariant(file_))
+            file_)
 
 
 class PlaylistItem(object):
@@ -134,34 +138,32 @@ class PlaylistModel(QtCore.QAbstractTableModel):
 
     def data(self, index, role=QtCore.Qt.DisplayRole):
         if (role == self.ActiveTrackRole):
-            return QtCore.QVariant(index.row() == self.active_track_row)
+            return index.row() == self.active_track_row
         if (not index.isValid() or
             not (0 <= index.row() < len(self.playlist))):
-                return QtCore.QVariant()
+                return None
         playlist_item = self.playlist[index.row()]
         column = index.column()
         if role == QtCore.Qt.DisplayRole:
             if column == self.FILE:
-                return QtCore.QVariant(playlist_item.file)
+                return playlist_item.file
             elif column == self.TITLE:
-                return QtCore.QVariant(playlist_item.title)
-        return QtCore.QVariant()
+                return playlist_item.title
+        return None
 
     def headerData(self, section, orientation, role=QtCore.Qt.DisplayRole):
         if role == QtCore.Qt.TextAlignmentRole:
             if orientation == QtCore.Qt.Horizontal:
-                return QtCore.QVariant(
-                    int(QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter))
-            return QtCore.QVariant(
-                int(QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter))
+                return int(QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
+            return int(QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
         if role != QtCore.Qt.DisplayRole:
-            return QtCore.QVariant()
+            return None
         if orientation == QtCore.Qt.Horizontal:
             if section == self.FILE:
-                return QtCore.QVariant("File")
+                return "File"
             elif section == self.TITLE:
-                return QtCore.QVariant("Title")
-        return QtCore.QVariant(int(section + 1))
+                return "Title"
+        return int(section + 1)
 
     def rowCount(self, index=QtCore.QModelIndex()):
         return len(self.playlist)
@@ -177,7 +179,7 @@ class PlaylistModel(QtCore.QAbstractTableModel):
             playlist_item = self.playlist[index.row()]
             column = index.column()
             if column == self.FILE:
-                playlist_item.file = unicode(value.toString())
+                playlist_item.file = value
             self.emit(
                 QtCore.SIGNAL("dataChanged(const QModelIndex &, "
                               "const QModelIndex &)"), index, index)
@@ -412,7 +414,7 @@ class MediaPlayer(kdeui.KMainWindow):
             self.playlist_model.insertRows(row)
             self.playlist_model.setData(
                 self.playlist_model.index(row, PlaylistModel.FILE),
-                QtCore.QVariant(file_))
+                file_)
             index = self.playlist_model.index(row, 0)
         self.playlist_view.resizeRowsToContents()
 
@@ -443,7 +445,7 @@ class MediaPlayer(kdeui.KMainWindow):
             selected_row, PlaylistModel.FILE)
         self.playlist_model.setData(
             file_index, None, PlaylistModel.ActiveTrackRole)
-        file_ = self.playlist_model.data(file_index).toString()
+        file_ = self.playlist_model.data(file_index)
         self.current_index = file_index
         media_source = phonon.Phonon.MediaSource(file_)
         self.media_object.setCurrentSource(media_source)
@@ -472,7 +474,7 @@ class MediaPlayer(kdeui.KMainWindow):
         self.media_object.enqueue(media_source)
 
     def update_title(self, source):
-        file_ = os.path.split(unicode(source.url().toString()))[-1]
+        file_ = os.path.split(source.url())[-1]
         self.setWindowTitle(u"%s - Ersatz" % file_)
 
     def _filter_playlist(self, filter_re):
