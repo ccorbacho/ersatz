@@ -44,13 +44,14 @@ class PopulatePlaylist(threading.Thread):
         super(PopulatePlaylist, self).__init__(**kwargs)
 
     def run(self):
-        row, items = self._queue.get()
-        for item in items:
-            if os.path.isdir(item.decode("utf-8")):
-                row = self._visitor(row, item, os.listdir(item))
-                continue
-            else:
-                self._insert_file(row, item)
+        while True:
+            row, items = self._queue.get()
+            for item in items:
+                if os.path.isdir(item.decode("utf-8")):
+                    row = self._visitor(row, item, os.listdir(item))
+                    continue
+                else:
+                    self._insert_file(row, item)
 
     def _visitor(self, row, directory, names):
         for name in sorted(names):
