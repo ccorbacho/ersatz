@@ -18,7 +18,6 @@
 
 # TODO:
 # * Keyboard bindings
-# * Playlist filter
 # * Video in playlist view
 
 import copy
@@ -244,6 +243,15 @@ class SimpleDirModel(QtGui.QDirModel):
         return 1
 
 
+class FullScreenVideoWidget(phonon.Phonon.VideoWidget):
+
+    def mouseDoubleClickEvent(self, event):
+        if self.isFullScreen():
+            self.exitFullScreen()
+        else:
+            self.enterFullScreen()
+
+
 class MediaPlayer(kdeui.KMainWindow):
 
     NOT_PLAYING_STATES = set([
@@ -262,7 +270,7 @@ class MediaPlayer(kdeui.KMainWindow):
         self.playlist_delegate = PlaylistDelegate()
 
     def _setup_player(self):
-        self.video_widget = phonon.Phonon.VideoWidget()
+        self.video_widget = FullScreenVideoWidget()
         self.audio_output = phonon.Phonon.AudioOutput()
         self.media_object = phonon.Phonon.MediaObject()
         self.media_object.aboutToFinish.connect(self.queue_next_track)
@@ -349,9 +357,8 @@ class MediaPlayer(kdeui.KMainWindow):
             kdeui.KStandardAction.keyBindings(
                 self, QtCore.SLOT("configure_shortcuts()"),
                 self.action_collection))
-
-        open_action = self._add_action("Open", icon="document-open")
-        player_menu.addAction(open_action)
+        dvd_action = self._add_action("Play &DVD", self._play_dvd)
+        player_menu.addAction(dvd_action)
 
     @QtCore.pyqtSignature("")
     def configure_shortcuts(self):
@@ -418,6 +425,13 @@ class MediaPlayer(kdeui.KMainWindow):
             index = self.playlist_model.index(row, 0)
         self.playlist_view.resizeRowsToContents()
 
+    def _play_dvd(self):
+        # TODO - use solid or something else to get the DVD drive name.
+        media_source = phonon.Phonon.MediaSource(
+            phonon.Phonon.Dvd, "/dev/dvd")
+        self.media_object.setCurrentSource(media_source)
+        self.media_object.play()
+
     def play_pause_icon(self, new_state, old_state):
         if new_state in self.NOT_PLAYING_STATES:
             self.play_pause_action.setIcon(kdeui.KIcon("media-playback-start"))
@@ -469,12 +483,12 @@ class MediaPlayer(kdeui.KMainWindow):
         if not next_index.isValid():
             return
         self.playlist_model.active_track_row += 1
-        file_ = self.playlist_model.data(next_index).toString()
+        file_ = self.playlist_model.data(next_index)
         media_source = phonon.Phonon.MediaSource(file_)
         self.media_object.enqueue(media_source)
 
     def update_title(self, source):
-        file_ = os.path.split(source.url())[-1]
+        file_ = os.path.split(unicode(source.url()))[-1]
         self.setWindowTitle(u"%s - Ersatz" % file_)
 
     def _filter_playlist(self, filter_re):
