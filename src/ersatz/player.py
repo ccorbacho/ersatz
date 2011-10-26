@@ -488,7 +488,7 @@ class MediaPlayer(kdeui.KMainWindow):
         self.media_object.enqueue(media_source)
 
     def update_title(self, source):
-        file_ = os.path.split(unicode(source.url()))[-1]
+        file_ = os.path.split(unicode(source.url().toString()))[-1]
         self.setWindowTitle(u"%s - Ersatz" % file_)
 
     def _filter_playlist(self, filter_re):
