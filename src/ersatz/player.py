@@ -20,13 +20,12 @@
 # * Keyboard bindings
 # * Video in playlist view
 
-import copy
 import mimetypes
 import os
 import Queue
 import threading
 import sys
-import urllib
+import urlparse
 
 import sip
 sip.setapi("QString", 2)
@@ -80,15 +79,7 @@ class PopulatePlaylist(threading.Thread):
 class PlaylistItem(object):
 
     def __init__(self):
-        self._file = None
-
-    @property
-    def file(self):
-        return self._file
-
-    @file.setter
-    def file(self, file_):
-        self._file = file_
+        self.file = None
 
     @property
     def title(self):
@@ -204,20 +195,34 @@ class PlaylistModel(QtCore.QAbstractTableModel):
         if parent.row() != -1:
             row = parent.row()
         raw_data = data.data("text/uri-list")
-        files = [urllib.unquote(file_.replace("file://", "")) for file_ in
+        files = [urlparse.urlparse(file_).path for file_ in
                  unicode(raw_data).strip().split()]
         self._queue.put((row, files))
         return True
 
+    def _make_file_url(self, path):
+        return urlparse.urlunparse(("file", path, "", "", "", ""))
+
+    def mimeData(self, indices):
+        data = []
+        mime_data = QtCore.QMimeData()
+        for index in indices:
+            if not index.isValid():
+                continue
+            data.append(self._make_file_url(self.playlist[index.row()].file))
+        mime_data.setData("text/uri-list", "\n".join(data))
+        return mime_data
+
     def flags(self, index):
         default_flags = QtCore.QAbstractTableModel.flags(self, index)
         if index.isValid():
-            return QtCore.Qt.ItemIsDragEnabled | QtCore.Qt.ItemIsDropEnabled | default_flags
+            return (QtCore.Qt.ItemIsDragEnabled | QtCore.Qt.ItemIsDropEnabled |
+                    default_flags)
         else:
             return QtCore.Qt.ItemIsDropEnabled | default_flags
 
     def supportedDropActions(self):
-        return QtCore.Qt.CopyAction
+        return QtCore.Qt.CopyAction | QtCore.Qt.MoveAction
 
     def mimeTypes(self):
         return ["text/uri-list"]
@@ -284,6 +289,7 @@ class MediaPlayer(kdeui.KMainWindow):
 
     def _setup_playlist(self):
         self.playlist_view = QtGui.QTableView()
+        self.playlist_view.setSelectionMode(QtGui.QAbstractItemView.ExtendedSelection)
         self.playlist_view.setAcceptDrops(True)
         self.playlist_view.setDragEnabled(True)
         self.playlist_view.setDropIndicatorShown(True)
